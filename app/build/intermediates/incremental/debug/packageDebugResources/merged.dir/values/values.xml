@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="md_theme_onPrimary">#FFFFFF</color>
+    <color name="md_theme_onSurface">#F5F7FF</color>
+    <color name="md_theme_outline">#30374B</color>
+    <color name="md_theme_primary">#3F8DFC</color>
+    <color name="md_theme_secondary">#14171F</color>
+    <color name="md_theme_surface">#0C111D</color>
+    <string name="app_name">Calorie Snap</string>
+    <string name="calorie_estimate">Estimated calories</string>
+    <string name="camera_permission_rationale">Camera access is required to capture your meals.</string>
+    <string name="capture_meal">Snap meal</string>
+    <string name="confidence_label">Confidence</string>
+    <string name="grant_permission">Grant Camera Access</string>
+    <string name="processing_meal">Analyzing meal...</string>
+    <string name="retake_photo">Retake photo</string>
+    <style name="Theme.CaloriesTracker" parent="Theme.Material3.DayNight">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

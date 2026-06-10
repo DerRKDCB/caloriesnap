@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Calorie Snap</string>
+    <string name="camera_permission_rationale">Camera access is required to capture your meals.</string>
+    <string name="grant_permission">Grant Camera Access</string>
+    <string name="retake_photo">Retake photo</string>
+    <string name="capture_meal">Snap meal</string>
+    <string name="processing_meal">Analyzing meal...</string>
+    <string name="calorie_estimate">Estimated calories</string>
+    <string name="confidence_label">Confidence</string>
+</resources>
