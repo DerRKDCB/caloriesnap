@@ -73,8 +73,10 @@ import java.io.File
 @Composable
 fun CameraScreen(
     apiKey: String,
+    ollamaAddress: String,
+    ollamaModel: String,
     onClose: () -> Unit,
-    onCaloriesLogged: (Int) -> Unit,
+    onMealLogged: (Int, String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -128,7 +130,7 @@ fun CameraScreen(
                     }
                     capturedImage = bitmap.asImageBitmap()
                     scope.launch {
-                        runCatching { CalorieEstimator.estimate(bitmap, apiKey) }
+                        runCatching { CalorieEstimator.estimate(bitmap, apiKey, ollamaAddress, ollamaModel) }
                             .onSuccess { currentEstimate = it }
                             .onFailure { throwable ->
                                 errorMessage = throwable.localizedMessage ?: "AI estimate failed"
@@ -188,7 +190,7 @@ fun CameraScreen(
                 apiKeyMissing = apiKey.isBlank(),
                 onLogMeal = {
                     currentEstimate?.let {
-                        onCaloriesLogged(it.calories)
+                        onMealLogged(it.calories, it.note)
                         reset()
                         onClose()
                     }
@@ -254,28 +256,42 @@ private fun ResultCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        )
     ) {
         Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(text = "Calorie estimate", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                text = "Calorie estimate",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
             when {
                 isProcessing -> {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
-                        Text("Analyzing meal photo...")
+                        Text("Analyzing meal photo...", color = MaterialTheme.colorScheme.onSurface)
                     }
                 }
 
                 estimate != null -> {
-                    Text(text = "${estimate.calories} kcal", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "${estimate.calories} kcal",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                     Text(text = estimate.note, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                     ) {
                         Text(
                             text = "Confidence ${(estimate.confidence * 100).toInt()}%",
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(vertical = 8.dp, horizontal = 12.dp)
                         )
                     }
@@ -293,7 +309,10 @@ private fun ResultCard(
                 }
 
                 else -> {
-                    Text(text = "Snap a photo to analyze your meal.")
+                    Text(
+                        text = "Snap a photo to analyze your meal.",
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
         }

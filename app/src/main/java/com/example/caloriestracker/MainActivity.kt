@@ -33,22 +33,29 @@ class MainActivity : ComponentActivity() {
                         HomeScreen(
                             state = uiState,
                             onOpenCamera = { navController.navigate("camera") },
-                            onOpenSettings = { navController.navigate("settings") }
+                            onOpenSettings = { navController.navigate("settings") },
+                            onDeleteMeal = { id -> trackerViewModel.deleteMeal(id) }
                         )
                     }
                     composable("camera") {
                         CameraScreen(
                             apiKey = uiState.apiKey,
+                            ollamaAddress = uiState.ollamaAddress,
+                            ollamaModel = uiState.ollamaModel,
                             onClose = { navController.popBackStack() },
-                            onCaloriesLogged = { calories -> trackerViewModel.addMealCalories(calories) }
+                            onMealLogged = { calories, note -> trackerViewModel.addMeal(calories, note) }
                         )
                     }
                     composable("settings") {
                         SettingsScreen(
                             apiKey = uiState.apiKey,
+                            ollamaAddress = uiState.ollamaAddress,
+                            ollamaModel = uiState.ollamaModel,
                             dailyGoal = uiState.dailyGoal,
                             onBack = { navController.popBackStack() },
                             onApiKeyChange = trackerViewModel::updateApiKey,
+                            onAddressChange = trackerViewModel::updateOllamaAddress,
+                            onModelChange = trackerViewModel::updateOllamaModel,
                             onGoalChange = trackerViewModel::updateDailyGoal
                         )
                     }

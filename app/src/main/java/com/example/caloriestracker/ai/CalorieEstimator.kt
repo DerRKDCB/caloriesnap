@@ -21,12 +21,21 @@ data class CalorieEstimate(
 )
 
 /**
- * Placeholder for the future AI-powered calorie interpretation service.
- * Currently returns a pseudo-random yet stable value derived from the bitmap
- * so that the UI can be verified without an actual backend.
+ * Result of probing the configured Ollama instance from Settings.
+ */
+sealed interface OllamaTestResult {
+    data class Success(val message: String) : OllamaTestResult
+    data class Failure(val message: String) : OllamaTestResult
+}
+
+/**
+ * Talks to a (configurable) Ollama instance to interpret meal photos.
+ * Falls back to a deterministic stub when no instance is configured or the
+ * request fails, so the UI can still be exercised without a backend.
  */
 object CalorieEstimator {
-    private const val OLLAMA_ENDPOINT = "http://localhost:11434/api/generate"
+    private const val DEFAULT_ADDRESS = "http://localhost:11434"
+    private const val USER_AGENT = "CalorieSnap/1.0 (Android)"
     private val descriptors = listOf(
         "Looks like a balanced plate",
         "Carb heavy portion",
@@ -35,39 +44,153 @@ object CalorieEstimator {
         "Fresh bowl of greens"
     )
 
-    suspend fun estimate(bitmap: Bitmap, apiKey: String?): CalorieEstimate {
-        if (!apiKey.isNullOrBlank()) {
-            return runCatching { remoteEstimate(bitmap, apiKey) }
+    suspend fun estimate(
+        bitmap: Bitmap,
+        apiKey: String?,
+        address: String,
+        model: String
+    ): CalorieEstimate {
+        if (address.isNotBlank() && model.isNotBlank()) {
+            return runCatching { remoteEstimate(bitmap, apiKey, address, model) }
                 .getOrElse { fallbackEstimate(bitmap) }
         }
         return fallbackEstimate(bitmap)
     }
 
-    private suspend fun remoteEstimate(bitmap: Bitmap, apiKey: String): CalorieEstimate {
-        val response = withContext(Dispatchers.IO) {
-            val url = URL(OLLAMA_ENDPOINT)
-            val connection = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                setRequestProperty("Content-Type", "application/json")
-                setRequestProperty("Authorization", "Bearer $apiKey")
-                doInput = true
-                doOutput = true
-                connectTimeout = 15_000
-                readTimeout = 15_000
+    /**
+     * Sends a tiny real request to the configured Ollama instance to verify the
+     * address, credentials and that the chosen model actually responds. Used by
+     * the "Test" button in Settings. On failure it surfaces the HTTP status and
+     * the server's error body so problems can be diagnosed.
+     */
+    suspend fun testConnection(
+        address: String,
+        model: String,
+        apiKey: String?
+    ): OllamaTestResult = withContext(Dispatchers.IO) {
+        val base = normalizeBase(address)
+        if (base.isBlank()) {
+            return@withContext OllamaTestResult.Failure("Enter an Ollama address first.")
+        }
+        if (model.isBlank()) {
+            return@withContext OllamaTestResult.Failure("Enter a model name first.")
+        }
+        val endpoint = "$base/api/generate"
+        val payload = JSONObject().apply {
+            put("model", model)
+            put("prompt", "ping")
+            put("stream", false)
+        }
+        runCatching { postJson(endpoint, payload.toString(), apiKey) }.fold(
+            onSuccess = { (code, body) ->
+                when (code) {
+                    in 200..299 ->
+                        OllamaTestResult.Success("Connected. Model \"$model\" responded successfully.")
+                    401, 403 ->
+                        OllamaTestResult.Failure("HTTP $code: authentication failed. Check your API key. ${serverError(body)}".trim())
+                    404 ->
+                        OllamaTestResult.Failure("HTTP 404: model \"$model\" not found at $endpoint. ${serverError(body)}".trim())
+                    else ->
+                        OllamaTestResult.Failure("HTTP $code from $endpoint. ${serverError(body)}".trim())
+                }
+            },
+            onFailure = { error ->
+                OllamaTestResult.Failure(
+                    "Could not reach $endpoint: ${error.localizedMessage ?: error.javaClass.simpleName}"
+                )
             }
+        )
+    }
 
-            val payload = JSONObject().apply {
-                put("prompt", "Estimate calories for this meal photo and respond with JSON {\"calories\": number, \"confidence\": number, \"note\": string}.")
-                put("image", bitmap.toBase64())
+    /** Pulls the "error" field out of an Ollama JSON error body when present. */
+    private fun serverError(body: String): String {
+        if (body.isBlank()) return ""
+        val message = runCatching { JSONObject(body).optString("error") }.getOrNull()
+        val text = if (!message.isNullOrBlank()) message else body
+        return text.take(200)
+    }
+
+    /**
+     * POSTs a JSON body, manually following redirects so the Authorization
+     * header (and the body) survive an http -> https hop. Android's default
+     * HttpURLConnection drops the auth header across redirects, which surfaces
+     * as a spurious 401/403. Returns the final status code and response text.
+     */
+    private fun postJson(
+        endpoint: String,
+        jsonBody: String,
+        apiKey: String?,
+        redirectsLeft: Int = 3
+    ): Pair<Int, String> {
+        val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            instanceFollowRedirects = false
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("User-Agent", USER_AGENT)
+            if (!apiKey.isNullOrBlank()) {
+                setRequestProperty("Authorization", "Bearer ${apiKey.trim()}")
             }
-
+            doInput = true
+            doOutput = true
+            connectTimeout = 15_000
+            readTimeout = 30_000
+        }
+        try {
             connection.outputStream.use { stream ->
-                OutputStreamWriter(stream).use { writer ->
-                    writer.write(payload.toString())
+                OutputStreamWriter(stream).use { it.write(jsonBody) }
+            }
+            val code = connection.responseCode
+            if (code in 300..399 && redirectsLeft > 0) {
+                val location = connection.getHeaderField("Location")
+                if (!location.isNullOrBlank()) {
+                    val nextUrl = URL(URL(endpoint), location).toString()
+                    connection.disconnect()
+                    return postJson(nextUrl, jsonBody, apiKey, redirectsLeft - 1)
                 }
             }
+            val body = (if (code in 200..299) connection.inputStream else connection.errorStream)
+                ?.bufferedReader()?.use { it.readText() }.orEmpty()
+            return code to body
+        } finally {
+            connection.disconnect()
+        }
+    }
 
-            connection.inputStream.bufferedReader().use { it.readText() }
+    /** Strips trailing slashes and any known endpoint suffix to get the base URL. */
+    private fun normalizeBase(address: String): String {
+        var base = address.trim().trimEnd('/')
+        base = base.removeSuffix("/api/generate").trimEnd('/')
+        base = base.removeSuffix("/generate").trimEnd('/')
+        base = base.removeSuffix("/api").trimEnd('/')
+        return base
+    }
+
+    private suspend fun remoteEstimate(
+        bitmap: Bitmap,
+        apiKey: String?,
+        address: String,
+        model: String
+    ): CalorieEstimate {
+        val response = withContext(Dispatchers.IO) {
+            val base = normalizeBase(address)
+            val endpoint = "$base/api/generate"
+            val payload = JSONObject().apply {
+                put("model", model)
+                put(
+                    "prompt",
+                    "You are a nutrition assistant. Look at the food in this image and estimate its total calories. " +
+                        "Respond with ONLY a compact JSON object and nothing else, no markdown, no explanation: " +
+                        "{\"calories\": <integer kcal>, \"confidence\": <number between 0 and 1>, \"note\": \"<short description of the food>\"}."
+                )
+                put("stream", false)
+                put("images", org.json.JSONArray().put(bitmap.toBase64()))
+            }
+            val (code, body) = postJson(endpoint, payload.toString(), apiKey)
+            if (code !in 200..299) {
+                throw java.io.IOException("HTTP $code: ${serverError(body)}")
+            }
+            body
         }
         return parseRemoteEstimate(response) ?: fallbackEstimate(bitmap)
     }
@@ -84,30 +207,57 @@ object CalorieEstimator {
 
     private fun parseRemoteEstimate(body: String): CalorieEstimate? {
         return runCatching {
-            val json = JSONObject(body)
+            // Ollama's /api/generate wraps the model output in {"response": "..."}.
+            val outer = runCatching { JSONObject(body) }.getOrNull()
+            val responseText = outer?.optString("response").orEmpty().ifBlank { body }
+
+            // The model is asked to reply with a JSON object; it may still wrap it
+            // in prose or a ```json fence, so pull out the first {...} block.
+            val inner = extractJsonObject(responseText)
+
+            val source = inner ?: outer
             val calories = when {
-                json.has("calories") -> json.getDouble("calories")
-                json.has("response") -> extractCalories(json.getString("response"))?.toDouble()
-                else -> null
+                source?.has("calories") == true -> source.optDouble("calories")
+                else -> extractCalories(responseText)?.toDouble()
             }
             val confidence = when {
-                json.has("confidence") -> json.getDouble("confidence")
-                json.has("response") -> extractConfidence(json.getString("response"))
-                else -> null
+                source?.has("confidence") == true -> source.optDouble("confidence")
+                else -> extractConfidence(responseText)
             }
             val description = when {
-                json.has("note") -> json.getString("note")
-                json.has("response") -> json.getString("response")
-                else -> null
+                source?.has("note") == true -> source.optString("note")
+                inner == null && responseText.isNotBlank() -> responseText.trim().take(120)
+                else -> "Estimated from photo"
             }
-            if (calories != null && description != null) {
+
+            if (calories != null && !calories.isNaN()) {
                 CalorieEstimate(
                     calories = calories.roundToInt().coerceAtLeast(0),
-                    confidence = confidence?.coerceIn(0.1, 1.0)?.toFloat() ?: 0.8f,
-                    note = description
+                    confidence = confidence?.takeIf { !it.isNaN() }?.coerceIn(0.1, 1.0)?.toFloat() ?: 0.8f,
+                    note = description.ifBlank { "Estimated from photo" }
                 )
             } else null
         }.getOrNull()
+    }
+
+    /** Finds and parses the first balanced {...} JSON object inside a string. */
+    private fun extractJsonObject(text: String): JSONObject? {
+        val start = text.indexOf('{')
+        if (start < 0) return null
+        var depth = 0
+        for (i in start until text.length) {
+            when (text[i]) {
+                '{' -> depth++
+                '}' -> {
+                    depth--
+                    if (depth == 0) {
+                        val candidate = text.substring(start, i + 1)
+                        return runCatching { JSONObject(candidate) }.getOrNull()
+                    }
+                }
+            }
+        }
+        return null
     }
 
     private fun extractCalories(text: String): Int? {

@@ -5,13 +5,17 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.caloriestracker.data.CaloriePreferences
 import com.example.caloriestracker.data.CaloriePreferencesRepository
+import com.example.caloriestracker.data.Meal
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 data class CalorieTrackerUiState(
     val apiKey: String = "",
+    val ollamaAddress: String = CaloriePreferences.DEFAULT_OLLAMA_ADDRESS,
+    val ollamaModel: String = CaloriePreferences.DEFAULT_OLLAMA_MODEL,
     val dailyGoal: Int = 2000,
+    val meals: List<Meal> = emptyList(),
     val todaysTotal: Int = 0,
     val isLoading: Boolean = true
 )
@@ -31,16 +35,34 @@ class CalorieTrackerViewModel(
         }
     }
 
-    fun addMealCalories(calories: Int) {
+    fun addMeal(calories: Int, note: String) {
         if (calories <= 0) return
         viewModelScope.launch {
-            repository.addCalories(calories)
+            repository.addMeal(calories, note)
+        }
+    }
+
+    fun deleteMeal(id: String) {
+        viewModelScope.launch {
+            repository.deleteMeal(id)
         }
     }
 
     fun updateApiKey(value: String) {
         viewModelScope.launch {
             repository.updateApiKey(value)
+        }
+    }
+
+    fun updateOllamaAddress(value: String) {
+        viewModelScope.launch {
+            repository.updateOllamaAddress(value)
+        }
+    }
+
+    fun updateOllamaModel(value: String) {
+        viewModelScope.launch {
+            repository.updateOllamaModel(value)
         }
     }
 
@@ -53,7 +75,10 @@ class CalorieTrackerViewModel(
     private fun CaloriePreferences.toUiState(): CalorieTrackerUiState =
         CalorieTrackerUiState(
             apiKey = apiKey,
+            ollamaAddress = ollamaAddress,
+            ollamaModel = ollamaModel,
             dailyGoal = dailyGoal,
+            meals = meals,
             todaysTotal = todaysTotal,
             isLoading = false
         )
