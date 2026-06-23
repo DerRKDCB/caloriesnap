@@ -8,9 +8,8 @@ choose day
     button back forward
     calender
 
-show currend day meals
-    delete
+ok show currend day meals
+    ok delete
 
-    test changes (current)
 
 botton for text input
