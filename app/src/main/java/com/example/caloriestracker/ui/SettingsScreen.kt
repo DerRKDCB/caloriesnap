@@ -1,6 +1,8 @@
 package com.example.caloriestracker.ui
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,7 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,16 +36,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.AnnotatedString
 import com.example.caloriestracker.ai.CalorieEstimator
 import com.example.caloriestracker.ai.OllamaTestResult
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,15 +70,69 @@ fun SettingsScreen(
     var showApiKey by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
-    val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
     var isTesting by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<OllamaTestResult?>(null) }
     var isExporting by remember { mutableStateOf(false) }
+    var exportPayload by remember { mutableStateOf<String?>(null) }
     var isImporting by remember { mutableStateOf(false) }
-    var showImportDialog by remember { mutableStateOf(false) }
-    var importPayload by remember { mutableStateOf("") }
-    var importError by remember { mutableStateOf<String?>(null) }
+
+    val exportFileLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        val payload = exportPayload
+        if (uri == null) {
+            if (payload != null) {
+                Toast.makeText(context, "Export canceled", Toast.LENGTH_SHORT).show()
+            }
+            exportPayload = null
+            isExporting = false
+            return@rememberLauncherForActivityResult
+        }
+        if (payload.isNullOrEmpty()) {
+            Toast.makeText(context, "Nothing to export", Toast.LENGTH_SHORT).show()
+            isExporting = false
+            return@rememberLauncherForActivityResult
+        }
+        scope.launch {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { stream ->
+                    stream.write(payload.toByteArray())
+                } ?: error("Unable to open destination")
+            }.onSuccess {
+                Toast.makeText(context, "Export saved", Toast.LENGTH_SHORT).show()
+            }.onFailure { error ->
+                Toast.makeText(context, error.localizedMessage ?: "Export failed", Toast.LENGTH_SHORT).show()
+            }
+            exportPayload = null
+            isExporting = false
+        }
+    }
+
+    val importFileLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) {
+            Toast.makeText(context, "Import canceled", Toast.LENGTH_SHORT).show()
+            isImporting = false
+            return@rememberLauncherForActivityResult
+        }
+        scope.launch {
+            val dataResult = runCatching {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    stream.bufferedReader().readText()
+                } ?: error("Unable to read file")
+            }
+            dataResult.onSuccess { payload ->
+                runCatching { onImportDatabase(payload) }
+                    .onSuccess {
+                        Toast.makeText(context, "Import successful", Toast.LENGTH_SHORT).show()
+                    }
+                    .onFailure { error ->
+                        Toast.makeText(context, error.localizedMessage ?: "Import failed", Toast.LENGTH_SHORT).show()
+                    }
+            }.onFailure { error ->
+                Toast.makeText(context, error.localizedMessage ?: "Import failed", Toast.LENGTH_SHORT).show()
+            }
+            isImporting = false
+        }
+    }
 
     Scaffold(
         modifier = modifier,
@@ -201,17 +256,20 @@ fun SettingsScreen(
                 Text(text = "Data management", style = MaterialTheme.typography.titleMedium)
                 OutlinedButton(
                     onClick = {
+                        if (isExporting) return@OutlinedButton
                         isExporting = true
                         scope.launch {
                             runCatching { onExportDatabase() }
                                 .onSuccess { data ->
-                                    clipboardManager.setText(AnnotatedString(data))
-                                    Toast.makeText(context, "Exported to clipboard", Toast.LENGTH_SHORT).show()
+                                    exportPayload = data
+                                    val suggestedName = "calorie-snap-${LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))}.json"
+                                    exportFileLauncher.launch(suggestedName)
                                 }
                                 .onFailure { error ->
                                     Toast.makeText(context, error.localizedMessage ?: "Export failed", Toast.LENGTH_SHORT).show()
+                                    exportPayload = null
+                                    isExporting = false
                                 }
-                            isExporting = false
                         }
                     },
                     enabled = !isExporting,
@@ -232,18 +290,28 @@ fun SettingsScreen(
 
                 OutlinedButton(
                     onClick = {
-                        importPayload = ""
-                        importError = null
-                        showImportDialog = true
+                        if (isImporting) return@OutlinedButton
+                        isImporting = true
+                        importFileLauncher.launch(arrayOf("application/json", "text/plain"))
                     },
                     enabled = !isImporting,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Import database")
+                    if (isImporting) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Text("Opening files…")
+                        }
+                    } else {
+                        Text("Import database")
+                    }
                 }
 
                 Text(
-                    text = "Export copies your meals and settings to the clipboard. Import restores from exported text.",
+                    text = "Export saves your meals and settings to a JSON file. Import restores from a saved JSON file.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -256,73 +324,4 @@ fun SettingsScreen(
         }
     }
 
-    if (showImportDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                if (!isImporting) {
-                    showImportDialog = false
-                    importPayload = ""
-                    importError = null
-                }
-            },
-            title = { Text("Import database") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
-                        value = importPayload,
-                        onValueChange = {
-                            importPayload = it
-                            importError = null
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Paste exported JSON") },
-                        minLines = 4
-                    )
-                    importError?.let { error ->
-                        Text(text = error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = importPayload.isNotBlank() && !isImporting,
-                    onClick = {
-                        isImporting = true
-                        scope.launch {
-                            runCatching { onImportDatabase(importPayload) }
-                                .onSuccess {
-                                    Toast.makeText(context, "Import successful", Toast.LENGTH_SHORT).show()
-                                    showImportDialog = false
-                                    importPayload = ""
-                                    importError = null
-                                }
-                                .onFailure { error ->
-                                    importError = error.localizedMessage ?: "Import failed"
-                                }
-                            isImporting = false
-                        }
-                    }
-                ) {
-                    if (isImporting) {
-                        Text("Importing…")
-                    } else {
-                        Text("Import")
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        if (!isImporting) {
-                            showImportDialog = false
-                            importPayload = ""
-                            importError = null
-                        }
-                    }
-                ) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
 }

@@ -14,8 +14,11 @@ ok show current day meals
 
 ok fix every day same meals bug
 
-settings
+ok settings
     ok import/export database
+    ok make it import/export a file
     
 
-button for text input
+ok button for text input
+
+icon / logo
