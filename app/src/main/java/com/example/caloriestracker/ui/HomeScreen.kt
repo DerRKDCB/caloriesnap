@@ -1,6 +1,7 @@
 package com.example.caloriestracker.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
@@ -76,7 +78,12 @@ fun HomeScreen(
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
     val headerDate = headerFormatter.format(selectedDate)
     val canGoForward = selectedDate.isBefore(today)
-    val progress = if (state.dailyGoal == 0) 0f else (state.todaysTotal / state.dailyGoal.toFloat()).coerceIn(0f, 1f)
+    val mealsForSelectedDate = state.mealHistory[selectedDate]
+        ?: if (selectedDate == today) state.meals else emptyList()
+    val selectedDayTotal = mealsForSelectedDate.sumOf { it.calories }
+    val progress = if (state.dailyGoal == 0) 0f else (selectedDayTotal / state.dailyGoal.toFloat()).coerceIn(0f, 1f)
+    val isTodaySelected = selectedDate == today
+    val caloriesLeft = (state.dailyGoal - selectedDayTotal).coerceAtLeast(0)
 
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(
@@ -149,19 +156,50 @@ fun HomeScreen(
                 IconButton(onClick = { selectedDate = selectedDate.minusDays(1) }) {
                     Icon(imageVector = Icons.Rounded.KeyboardArrowLeft, contentDescription = "Previous day")
                 }
+                val dateButtonModifier = if (isTodaySelected) {
+                    Modifier
+                        .weight(1f)
+                        .border(
+                            width = 2.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(26.dp)
+                        )
+                } else {
+                    Modifier.weight(1f)
+                }
                 FilledTonalButton(
                     onClick = { showDatePicker = true },
-                    modifier = Modifier.weight(1f),
+                    modifier = dateButtonModifier,
                     shape = RoundedCornerShape(26.dp),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+                    colors = if (isTodaySelected) {
+                        ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        ButtonDefaults.filledTonalButtonColors()
+                    }
                 ) {
-                    Icon(imageVector = Icons.Rounded.CalendarMonth, contentDescription = null)
-                    HorizontalSpacer(12)
-                    Text(
-                        text = headerDate,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Rounded.CalendarMonth, contentDescription = null)
+                            HorizontalSpacer(12)
+                            Text(
+                                text = headerDate,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        if (isTodaySelected) {
+                            VerticalSpacer(4)
+                            Text(
+                                text = "Today",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
                 }
                 IconButton(
                     onClick = { selectedDate = selectedDate.plusDays(1) },
@@ -175,7 +213,7 @@ fun HomeScreen(
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = CircleShape,
+                shape = RoundedCornerShape(32.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
             ) {
                 Column(
@@ -185,14 +223,13 @@ fun HomeScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(text = "Consumed", style = MaterialTheme.typography.labelMedium)
                     Text(
-                        text = "${state.todaysTotal} kcal",
+                        text = "${selectedDayTotal} / ${state.dailyGoal}kcal",
                         style = MaterialTheme.typography.displaySmall,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Goal ${state.dailyGoal} kcal",
+                        text = "left: ${caloriesLeft}kcal",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
@@ -207,44 +244,23 @@ fun HomeScreen(
             }
 
             VerticalSpacer(32)
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
-            ) {
-                Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = "Stay on track",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = if (state.dailyGoal > state.todaysTotal) {
-                            "${state.dailyGoal - state.todaysTotal} kcal remaining for today"
-                        } else {
-                            "You've reached your goal. Great job!"
-                        },
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Button(onClick = onOpenCamera, modifier = Modifier.fillMaxWidth()) {
-                        Icon(imageVector = Icons.Rounded.CameraAlt, contentDescription = null)
-                        HorizontalSpacer(8)
-                        Text(text = "Snap meal")
-                    }
-                }
+            Button(onClick = onOpenCamera, modifier = Modifier.fillMaxWidth()) {
+                Icon(imageVector = Icons.Rounded.CameraAlt, contentDescription = null)
+                HorizontalSpacer(8)
+                Text(text = "Snap meal")
             }
 
             VerticalSpacer(24)
 
             Text(
-                text = if (selectedDate == today) "Today's meals" else "Meals",
+                text = if (selectedDate == today) "Today's meals" else "$headerDate meals",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
 
             VerticalSpacer(12)
 
-            if (state.meals.isEmpty()) {
+            if (mealsForSelectedDate.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -254,7 +270,11 @@ fun HomeScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No meals logged yet. Snap a meal to get started.",
+                        text = if (selectedDate == today) {
+                            "No meals logged yet. Snap a meal to get started."
+                        } else {
+                            "No meals logged for $headerDate."
+                        },
                         textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -266,7 +286,7 @@ fun HomeScreen(
                         .weight(1f),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(items = state.meals, key = { it.id }) { meal ->
+                    items(items = mealsForSelectedDate, key = { it.id }) { meal ->
                         MealRow(meal = meal, onDelete = { onDeleteMeal(meal.id) })
                     }
                 }
