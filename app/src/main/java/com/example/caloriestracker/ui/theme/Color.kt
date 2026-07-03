@@ -2,8 +2,14 @@ package com.example.caloriestracker.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val PrimaryBlue = Color(0xFF3F8DFC)
-val SecondaryBlack = Color(0xFF0A0D16)
-val AccentCoral = Color(0xFFFF6859)
-val SurfaceDark = Color(0xFF0C111D)
-val SurfaceLight = Color(0xFFF5F7FF)
+val LeafGreen = Color(0xFF77C161)
+val LeafGreenBright = Color(0xFF8ED883)
+val ForestGreen = Color(0xFF2F5B24)
+val FernSecondary = Color(0xFF4D7C3A)
+val DewSurfaceLight = Color(0xFFF4FFF1)
+val GroveSurfaceDark = Color(0xFF0F190D)
+val CitrusAccent = Color(0xFFFFB870)
+val MistSurfaceVariantLight = Color(0xFFE1EED9)
+val MossSurfaceVariantDark = Color(0xFF2F3C2B)
+val OnLightText = Color(0xFF1F2A1A)
+val OnDarkText = Color(0xFFF1FFEA)
