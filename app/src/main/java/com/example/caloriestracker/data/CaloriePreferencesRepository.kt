@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
 import org.json.JSONArray
@@ -135,6 +136,47 @@ class CaloriePreferencesRepository(private val context: Context) {
             history.remove(today)
             prefs.writeMealHistory(history)
             prefs[Keys.TODAYS_DATE] = today.toString()
+        }
+    }
+
+    suspend fun exportDatabase(): String {
+        val preferences = context.calorieDataStore.data.first()
+        val state = mapToCaloriePreferences(preferences)
+        val historyJson = state.mealHistory.toHistoryJson()
+        return JSONObject().apply {
+            put("apiKey", state.apiKey)
+            put("ollamaAddress", state.ollamaAddress)
+            put("ollamaModel", state.ollamaModel)
+            put("dailyGoal", state.dailyGoal)
+            put("mealHistory", historyJson?.let { JSONObject(it) } ?: JSONObject())
+        }.toString()
+    }
+
+    suspend fun importDatabase(payload: String) {
+        if (payload.isBlank()) throw IllegalArgumentException("Import data is empty")
+        val json = JSONObject(payload)
+        val now = LocalDate.now()
+        val historyRaw = json.opt("mealHistory")?.let {
+            when (it) {
+                is JSONObject -> it.toString()
+                is JSONArray -> it.toString()
+                is String -> it
+                else -> null
+            }
+        }
+        val history = parseMealHistory(historyRaw, now)
+        val apiKey = json.optString("apiKey", "")
+        val address = json.optString("ollamaAddress", CaloriePreferences.DEFAULT_OLLAMA_ADDRESS)
+        val model = json.optString("ollamaModel", CaloriePreferences.DEFAULT_OLLAMA_MODEL)
+        val goal = json.optInt("dailyGoal", 2000).coerceAtLeast(500)
+
+        context.calorieDataStore.edit { prefs ->
+            prefs[Keys.API_KEY] = apiKey.trim()
+            prefs[Keys.OLLAMA_ADDRESS] = address.trim().ifBlank { CaloriePreferences.DEFAULT_OLLAMA_ADDRESS }
+            prefs[Keys.OLLAMA_MODEL] = model.trim().ifBlank { CaloriePreferences.DEFAULT_OLLAMA_MODEL }
+            prefs[Keys.DAILY_GOAL] = goal
+            prefs.writeMealHistory(history)
+            prefs[Keys.TODAYS_DATE] = now.toString()
         }
     }
 

@@ -74,6 +74,12 @@ class CalorieTrackerViewModel(
         }
     }
 
+    suspend fun exportDatabase(): String = repository.exportDatabase()
+
+    suspend fun importDatabase(payload: String) {
+        repository.importDatabase(payload)
+    }
+
     private fun CaloriePreferences.toUiState(): CalorieTrackerUiState =
         CalorieTrackerUiState(
             apiKey = apiKey,

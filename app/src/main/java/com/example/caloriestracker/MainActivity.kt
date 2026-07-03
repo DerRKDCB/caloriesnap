@@ -56,7 +56,9 @@ class MainActivity : ComponentActivity() {
                             onApiKeyChange = trackerViewModel::updateApiKey,
                             onAddressChange = trackerViewModel::updateOllamaAddress,
                             onModelChange = trackerViewModel::updateOllamaModel,
-                            onGoalChange = trackerViewModel::updateDailyGoal
+                            onGoalChange = trackerViewModel::updateDailyGoal,
+                            onExportDatabase = { trackerViewModel.exportDatabase() },
+                            onImportDatabase = { payload -> trackerViewModel.importDatabase(payload) }
                         )
                     }
                 }

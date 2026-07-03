@@ -6,18 +6,16 @@ ok estimate calories with ollama api
 
 ok choose day
     ok button back forward
-    ok calender
+    ok calendar
 
 ok show current day meals
     ok delete
 
 
-fix every day same meals bug
-    implemented, totest
+ok fix every day same meals bug
 
 settings
-    import/export database
-    
+    ok import/export database
     
 
 button for text input
