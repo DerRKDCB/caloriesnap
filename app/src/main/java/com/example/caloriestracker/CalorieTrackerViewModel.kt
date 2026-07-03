@@ -9,6 +9,7 @@ import com.example.caloriestracker.data.Meal
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 data class CalorieTrackerUiState(
     val apiKey: String = "",
@@ -17,6 +18,7 @@ data class CalorieTrackerUiState(
     val dailyGoal: Int = 2000,
     val meals: List<Meal> = emptyList(),
     val todaysTotal: Int = 0,
+    val mealHistory: Map<LocalDate, List<Meal>> = emptyMap(),
     val isLoading: Boolean = true
 )
 
@@ -80,6 +82,7 @@ class CalorieTrackerViewModel(
             dailyGoal = dailyGoal,
             meals = meals,
             todaysTotal = todaysTotal,
+            mealHistory = mealHistory,
             isLoading = false
         )
 

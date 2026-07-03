@@ -4,12 +4,20 @@ ok choose model
 
 ok estimate calories with ollama api
 
-choose day
-    button back forward
-    calender
+ok choose day
+    ok button back forward
+    ok calender
 
-ok show currend day meals
+ok show current day meals
     ok delete
 
 
-botton for text input
+fix every day same meals bug
+    implemented, totest
+
+settings
+    import/export database
+    
+    
+
+button for text input
