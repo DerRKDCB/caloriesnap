@@ -52,9 +52,24 @@ object CalorieEstimator {
     ): CalorieEstimate {
         if (address.isNotBlank() && model.isNotBlank()) {
             return runCatching { remoteEstimate(bitmap, apiKey, address, model) }
-                .getOrElse { fallbackEstimate(bitmap) }
+                .getOrElse { fallbackEstimateFromBitmap(bitmap) }
         }
-        return fallbackEstimate(bitmap)
+        return fallbackEstimateFromBitmap(bitmap)
+    }
+
+    suspend fun estimateFromDescription(
+        description: String,
+        apiKey: String?,
+        address: String,
+        model: String
+    ): CalorieEstimate {
+        val input = description.trim()
+        require(input.isNotBlank()) { "Description cannot be empty" }
+        if (address.isNotBlank() && model.isNotBlank()) {
+            return runCatching { remoteEstimate(input, apiKey, address, model) }
+                .getOrElse { fallbackEstimateFromText(input) }
+        }
+        return fallbackEstimateFromText(input)
     }
 
     /**
@@ -192,10 +207,37 @@ object CalorieEstimator {
             }
             body
         }
-        return parseRemoteEstimate(response) ?: fallbackEstimate(bitmap)
+        return parseRemoteEstimate(response) ?: fallbackEstimateFromBitmap(bitmap)
     }
 
-    private suspend fun fallbackEstimate(bitmap: Bitmap): CalorieEstimate {
+    private suspend fun remoteEstimate(
+        description: String,
+        apiKey: String?,
+        address: String,
+        model: String
+    ): CalorieEstimate {
+        val response = withContext(Dispatchers.IO) {
+            val base = normalizeBase(address)
+            val endpoint = "$base/api/generate"
+            val payload = JSONObject().apply {
+                put("model", model)
+                put(
+                    "prompt",
+                    "You are a nutrition assistant. Estimate the total calories for the described meal: \"$description\". " +
+                        "Respond ONLY with a compact JSON object: {\"calories\": <integer>, \"confidence\": <0-1>, \"note\": \"short description\"}."
+                )
+                put("stream", false)
+            }
+            val (code, body) = postJson(endpoint, payload.toString(), apiKey)
+            if (code !in 200..299) {
+                throw java.io.IOException("HTTP $code: ${serverError(body)}")
+            }
+            body
+        }
+        return parseRemoteEstimate(response) ?: fallbackEstimateFromText(description)
+    }
+
+    private suspend fun fallbackEstimateFromBitmap(bitmap: Bitmap): CalorieEstimate {
         delay(1200)
         val seed = bitmap.byteCount + bitmap.width * bitmap.height
         val random = Random(seed.toLong())
@@ -203,6 +245,15 @@ object CalorieEstimator {
         val confidence = 0.65f + random.nextFloat() * 0.3f
         val note = descriptors[random.nextInt(descriptors.size)]
         return CalorieEstimate(calories, confidence.coerceAtMost(0.97f), note)
+    }
+
+    private suspend fun fallbackEstimateFromText(description: String): CalorieEstimate {
+        delay(900)
+        val seed = description.hashCode().absoluteValue
+        val calories = 150 + (seed % 550)
+        val confidence = 0.55f + ((seed % 40) / 100f)
+        val note = if (description.isNotBlank()) description.trim().take(80) else descriptors[seed % descriptors.size]
+        return CalorieEstimate(calories, confidence.coerceAtMost(0.9f), note.ifBlank { "Estimated from description" })
     }
 
     private fun parseRemoteEstimate(body: String): CalorieEstimate? {

@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
                         HomeScreen(
                             state = uiState,
                             onOpenCamera = { navController.navigate("camera") },
+                            onManualEntry = { calories, note -> trackerViewModel.addDescriptionMeal(calories, note) },
                             onOpenSettings = { navController.navigate("settings") },
                             onDeleteMeal = { id -> trackerViewModel.deleteMeal(id) }
                         )

@@ -44,6 +44,10 @@ class CalorieTrackerViewModel(
         }
     }
 
+    fun addDescriptionMeal(calories: Int, description: String) {
+        addMeal(calories, description.ifBlank { "Logged meal" })
+    }
+
     fun deleteMeal(id: String) {
         viewModelScope.launch {
             repository.deleteMeal(id)

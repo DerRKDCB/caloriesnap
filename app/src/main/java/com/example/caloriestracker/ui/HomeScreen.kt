@@ -22,13 +22,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.EditNote
+import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,6 +41,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,6 +50,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -56,23 +62,28 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import com.example.caloriestracker.CalorieTrackerUiState
+import com.example.caloriestracker.ai.CalorieEstimator
 import com.example.caloriestracker.data.Meal
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.launch
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun HomeScreen(
     state: CalorieTrackerUiState,
     onOpenCamera: () -> Unit,
+    onManualEntry: (Int, String) -> Unit,
     onOpenSettings: () -> Unit,
     onDeleteMeal: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val headerFormatter = remember { DateTimeFormatter.ofPattern("EEEE, MMM d") }
+    val headerFormatter = remember { DateTimeFormatter.ofPattern("dd.MM.yyyy") }
     val today = LocalDate.now()
     var selectedDate by rememberSaveable(stateSaver = LocalDateSaver) { mutableStateOf(today) }
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
@@ -84,6 +95,15 @@ fun HomeScreen(
     val progress = if (state.dailyGoal == 0) 0f else (selectedDayTotal / state.dailyGoal.toFloat()).coerceIn(0f, 1f)
     val isTodaySelected = selectedDate == today
     val caloriesLeft = (state.dailyGoal - selectedDayTotal).coerceAtLeast(0)
+    var manualDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var manualCalories by rememberSaveable { mutableStateOf("") }
+    var manualNote by rememberSaveable { mutableStateOf("") }
+    var manualError by remember { mutableStateOf<String?>(null) }
+    var llmDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var llmDescription by rememberSaveable { mutableStateOf("") }
+    var llmError by remember { mutableStateOf<String?>(null) }
+    var llmIsLoading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(
@@ -129,25 +149,6 @@ fun HomeScreen(
                 )
                 .padding(horizontal = 24.dp, vertical = 32.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "Daily overview", style = MaterialTheme.typography.labelLarge)
-                    Text(
-                        text = "Keep logging meals",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                IconButton(onClick = onOpenSettings) {
-                    Icon(imageVector = Icons.Rounded.Settings, contentDescription = "Settings")
-                }
-            }
-
-            VerticalSpacer(16)
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -207,6 +208,9 @@ fun HomeScreen(
                 ) {
                     Icon(imageVector = Icons.Rounded.KeyboardArrowRight, contentDescription = "Next day")
                 }
+                IconButton(onClick = onOpenSettings) {
+                    Icon(imageVector = Icons.Rounded.Settings, contentDescription = "Settings")
+                }
             }
 
             VerticalSpacer(24)
@@ -244,10 +248,28 @@ fun HomeScreen(
             }
 
             VerticalSpacer(32)
-            Button(onClick = onOpenCamera, modifier = Modifier.fillMaxWidth()) {
-                Icon(imageVector = Icons.Rounded.CameraAlt, contentDescription = null)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(onClick = onOpenCamera, modifier = Modifier.weight(1f)) {
+                    Icon(imageVector = Icons.Rounded.CameraAlt, contentDescription = null)
+                    HorizontalSpacer(8)
+                    Text(text = "Snap meal")
+                }
+                Button(onClick = { llmDialogVisible = true }, modifier = Modifier.weight(1f)) {
+                    Icon(imageVector = Icons.Rounded.Psychology, contentDescription = null)
+                    HorizontalSpacer(8)
+                    Text(text = "Text")
+                }
+            }
+
+            VerticalSpacer(12)
+
+            Button(onClick = { manualDialogVisible = true }, modifier = Modifier.fillMaxWidth()) {
+                Icon(imageVector = Icons.Rounded.EditNote, contentDescription = null)
                 HorizontalSpacer(8)
-                Text(text = "Snap meal")
+                Text(text = "Manual")
             }
 
             VerticalSpacer(24)
@@ -292,6 +314,150 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    if (manualDialogVisible) {
+        AlertDialog(
+            onDismissRequest = {
+                manualDialogVisible = false
+                manualError = null
+            },
+            title = { Text(text = "Log meal manually") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = manualCalories,
+                        onValueChange = {
+                            manualCalories = it.filter { char -> char.isDigit() }
+                            manualError = null
+                        },
+                        label = { Text("Calories") },
+                        keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = manualNote,
+                        onValueChange = {
+                            manualNote = it
+                            manualError = null
+                        },
+                        label = { Text("Description") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    manualError?.let {
+                        Text(text = it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val caloriesValue = manualCalories.toIntOrNull()
+                    if (caloriesValue == null || caloriesValue <= 0) {
+                        manualError = "Enter calories"
+                        return@TextButton
+                    }
+                    onManualEntry(caloriesValue, manualNote)
+                    manualCalories = ""
+                    manualNote = ""
+                    manualError = null
+                    manualDialogVisible = false
+                }) {
+                    Text("Add")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    manualDialogVisible = false
+                    manualError = null
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (llmDialogVisible) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!llmIsLoading) {
+                    llmDialogVisible = false
+                    llmDescription = ""
+                    llmError = null
+                }
+            },
+            title = { Text(text = "AI calorie estimate") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = llmDescription,
+                        onValueChange = {
+                            llmDescription = it
+                            llmError = null
+                        },
+                        label = { Text("Describe your meal") },
+                        placeholder = { Text("e.g. Grilled salmon with quinoa and roasted veggies") },
+                        minLines = 3,
+                        enabled = !llmIsLoading,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (llmIsLoading) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Text(text = "Requesting estimate…")
+                        }
+                    }
+                    llmError?.let {
+                        Text(text = it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = llmDescription.isNotBlank() && !llmIsLoading,
+                    onClick = {
+                        val cleanedDescription = llmDescription.trim()
+                        llmIsLoading = true
+                        llmError = null
+                        scope.launch {
+                            runCatching {
+                                CalorieEstimator.estimateFromDescription(
+                                    description = cleanedDescription,
+                                    apiKey = state.apiKey,
+                                    address = state.ollamaAddress,
+                                    model = state.ollamaModel
+                                )
+                            }.onSuccess { estimate ->
+                                onManualEntry(estimate.calories, cleanedDescription.ifBlank { estimate.note })
+                                llmDescription = ""
+                                llmDialogVisible = false
+                            }.onFailure { error ->
+                                llmError = error.localizedMessage ?: "Could not estimate calories"
+                            }
+                            llmIsLoading = false
+                        }
+                    }
+                ) {
+                    if (llmIsLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Estimate")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !llmIsLoading,
+                    onClick = {
+                        llmDialogVisible = false
+                        llmDescription = ""
+                        llmError = null
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
