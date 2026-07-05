@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.KeyboardArrowLeft
@@ -46,6 +47,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -99,10 +101,15 @@ fun HomeScreen(
     var manualCalories by rememberSaveable { mutableStateOf("") }
     var manualNote by rememberSaveable { mutableStateOf("") }
     var manualError by remember { mutableStateOf<String?>(null) }
+    var manualIsWorkout by rememberSaveable { mutableStateOf(false) }
     var llmDialogVisible by rememberSaveable { mutableStateOf(false) }
     var llmDescription by rememberSaveable { mutableStateOf("") }
     var llmError by remember { mutableStateOf<String?>(null) }
     var llmIsLoading by remember { mutableStateOf(false) }
+    var workoutDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var workoutDescription by rememberSaveable { mutableStateOf("") }
+    var workoutError by remember { mutableStateOf<String?>(null) }
+    var workoutIsLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     if (showDatePicker) {
@@ -266,10 +273,20 @@ fun HomeScreen(
 
             VerticalSpacer(12)
 
-            Button(onClick = { manualDialogVisible = true }, modifier = Modifier.fillMaxWidth()) {
-                Icon(imageVector = Icons.Rounded.EditNote, contentDescription = null)
-                HorizontalSpacer(8)
-                Text(text = "Manual")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(onClick = { manualDialogVisible = true }, modifier = Modifier.weight(1f)) {
+                    Icon(imageVector = Icons.Rounded.EditNote, contentDescription = null)
+                    HorizontalSpacer(8)
+                    Text(text = "Manual")
+                }
+                Button(onClick = { workoutDialogVisible = true }, modifier = Modifier.weight(1f)) {
+                    Icon(imageVector = Icons.Rounded.FitnessCenter, contentDescription = null)
+                    HorizontalSpacer(8)
+                    Text(text = "Workout")
+                }
             }
 
             VerticalSpacer(24)
@@ -345,6 +362,14 @@ fun HomeScreen(
                         label = { Text("Description") },
                         modifier = Modifier.fillMaxWidth()
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(text = "Workout (subtract calories)")
+                        Switch(checked = manualIsWorkout, onCheckedChange = { manualIsWorkout = it })
+                    }
                     manualError?.let {
                         Text(text = it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
@@ -357,9 +382,16 @@ fun HomeScreen(
                         manualError = "Enter calories"
                         return@TextButton
                     }
-                    onManualEntry(caloriesValue, manualNote)
+                    val finalCalories = if (manualIsWorkout) -caloriesValue else caloriesValue
+                    if (finalCalories == 0) {
+                        manualError = "Calories cannot be zero"
+                        return@TextButton
+                    }
+                    val note = manualNote.ifBlank { if (manualIsWorkout) "Workout" else "" }
+                    onManualEntry(finalCalories, note)
                     manualCalories = ""
                     manualNote = ""
+                    manualIsWorkout = false
                     manualError = null
                     manualDialogVisible = false
                 }) {
@@ -370,6 +402,7 @@ fun HomeScreen(
                 TextButton(onClick = {
                     manualDialogVisible = false
                     manualError = null
+                    manualIsWorkout = false
                 }) {
                     Text("Cancel")
                 }
@@ -452,6 +485,92 @@ fun HomeScreen(
                         llmDialogVisible = false
                         llmDescription = ""
                         llmError = null
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (workoutDialogVisible) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!workoutIsLoading) {
+                    workoutDialogVisible = false
+                    workoutDescription = ""
+                    workoutError = null
+                }
+            },
+            title = { Text(text = "AI workout estimate") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = workoutDescription,
+                        onValueChange = {
+                            workoutDescription = it
+                            workoutError = null
+                        },
+                        label = { Text("Describe your workout") },
+                        placeholder = { Text("e.g. 30 min HIIT ride") },
+                        minLines = 3,
+                        enabled = !workoutIsLoading,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (workoutIsLoading) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Text(text = "Estimating calories burned…")
+                        }
+                    }
+                    workoutError?.let {
+                        Text(text = it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = workoutDescription.isNotBlank() && !workoutIsLoading,
+                    onClick = {
+                        val cleanedDescription = workoutDescription.trim()
+                        workoutIsLoading = true
+                        workoutError = null
+                        scope.launch {
+                            runCatching {
+                                CalorieEstimator.estimateWorkoutFromDescription(
+                                    description = cleanedDescription,
+                                    apiKey = state.apiKey,
+                                    address = state.ollamaAddress,
+                                    model = state.ollamaModel
+                                )
+                            }.onSuccess { estimate ->
+                                val caloriesBurned = estimate.calories.coerceAtLeast(1)
+                                val noteBase = cleanedDescription.ifBlank { estimate.note }
+                                val finalNote = if (noteBase.isBlank()) "Workout" else "Workout: ${noteBase.take(80)}"
+                                onManualEntry(-caloriesBurned, finalNote)
+                                workoutDescription = ""
+                                workoutDialogVisible = false
+                            }.onFailure { error ->
+                                workoutError = error.localizedMessage ?: "Could not estimate workout calories"
+                            }
+                            workoutIsLoading = false
+                        }
+                    }
+                ) {
+                    if (workoutIsLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Estimate")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !workoutIsLoading,
+                    onClick = {
+                        workoutDialogVisible = false
+                        workoutDescription = ""
+                        workoutError = null
                     }
                 ) {
                     Text("Cancel")

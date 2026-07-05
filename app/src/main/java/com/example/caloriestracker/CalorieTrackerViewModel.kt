@@ -38,7 +38,7 @@ class CalorieTrackerViewModel(
     }
 
     fun addMeal(calories: Int, note: String) {
-        if (calories <= 0) return
+        if (calories == 0) return
         viewModelScope.launch {
             repository.addMeal(calories, note)
         }

@@ -92,7 +92,7 @@ class CaloriePreferencesRepository(private val context: Context) {
     }
 
     suspend fun addMeal(calories: Int, note: String) {
-        if (calories <= 0) return
+        if (calories == 0) return
         context.calorieDataStore.edit { prefs ->
             val today = LocalDate.now()
             val storedDate = prefs[Keys.TODAYS_DATE].toLocalDateOrNull()

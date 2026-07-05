@@ -43,6 +43,7 @@ object CalorieEstimator {
         "Dense and indulgent treat",
         "Fresh bowl of greens"
     )
+    private enum class PromptContext { MEAL, WORKOUT }
 
     suspend fun estimate(
         bitmap: Bitmap,
@@ -66,10 +67,25 @@ object CalorieEstimator {
         val input = description.trim()
         require(input.isNotBlank()) { "Description cannot be empty" }
         if (address.isNotBlank() && model.isNotBlank()) {
-            return runCatching { remoteEstimate(input, apiKey, address, model) }
+            return runCatching { remoteEstimate(input, apiKey, address, model, PromptContext.MEAL) }
                 .getOrElse { fallbackEstimateFromText(input) }
         }
         return fallbackEstimateFromText(input)
+    }
+
+    suspend fun estimateWorkoutFromDescription(
+        description: String,
+        apiKey: String?,
+        address: String,
+        model: String
+    ): CalorieEstimate {
+        val input = description.trim()
+        require(input.isNotBlank()) { "Description cannot be empty" }
+        if (address.isNotBlank() && model.isNotBlank()) {
+            return runCatching { remoteEstimate(input, apiKey, address, model, PromptContext.WORKOUT) }
+                .getOrElse { fallbackWorkoutEstimateFromText(input) }
+        }
+        return fallbackWorkoutEstimateFromText(input)
     }
 
     /**
@@ -214,18 +230,23 @@ object CalorieEstimator {
         description: String,
         apiKey: String?,
         address: String,
-        model: String
+        model: String,
+        context: PromptContext
     ): CalorieEstimate {
         val response = withContext(Dispatchers.IO) {
             val base = normalizeBase(address)
             val endpoint = "$base/api/generate"
-            val payload = JSONObject().apply {
-                put("model", model)
-                put(
-                    "prompt",
+            val prompt = when (context) {
+                PromptContext.MEAL ->
                     "You are a nutrition assistant. Estimate the total calories for the described meal: \"$description\". " +
                         "Respond ONLY with a compact JSON object: {\"calories\": <integer>, \"confidence\": <0-1>, \"note\": \"short description\"}."
-                )
+                PromptContext.WORKOUT ->
+                    "You are a fitness coach. Estimate the calories burned for this workout: \"$description\". " +
+                        "Respond ONLY with JSON: {\"calories\": <integer calories burned>, \"confidence\": <0-1>, \"note\": \"short workout summary\"}."
+            }
+            val payload = JSONObject().apply {
+                put("model", model)
+                put("prompt", prompt)
                 put("stream", false)
             }
             val (code, body) = postJson(endpoint, payload.toString(), apiKey)
@@ -234,7 +255,12 @@ object CalorieEstimator {
             }
             body
         }
-        return parseRemoteEstimate(response) ?: fallbackEstimateFromText(description)
+        val parsed = parseRemoteEstimate(response)
+        return when {
+            parsed != null -> parsed
+            context == PromptContext.MEAL -> fallbackEstimateFromText(description)
+            else -> fallbackWorkoutEstimateFromText(description)
+        }
     }
 
     private suspend fun fallbackEstimateFromBitmap(bitmap: Bitmap): CalorieEstimate {
@@ -254,6 +280,15 @@ object CalorieEstimator {
         val confidence = 0.55f + ((seed % 40) / 100f)
         val note = if (description.isNotBlank()) description.trim().take(80) else descriptors[seed % descriptors.size]
         return CalorieEstimate(calories, confidence.coerceAtMost(0.9f), note.ifBlank { "Estimated from description" })
+    }
+
+    private suspend fun fallbackWorkoutEstimateFromText(description: String): CalorieEstimate {
+        delay(800)
+        val seed = description.hashCode().absoluteValue
+        val calories = 80 + (seed % 420)
+        val confidence = 0.6f + ((seed % 30) / 100f)
+        val note = if (description.isNotBlank()) description.trim().take(80) else "Workout session"
+        return CalorieEstimate(calories, confidence.coerceAtMost(0.95f), note.ifBlank { "Workout session" })
     }
 
     private fun parseRemoteEstimate(body: String): CalorieEstimate? {
