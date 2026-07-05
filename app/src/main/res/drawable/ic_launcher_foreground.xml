@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
-    android:insetLeft="2dp"
-    android:insetTop="2dp"
-    android:insetRight="2dp"
-    android:insetBottom="2dp">
+    android:insetLeft="0dp"
+    android:insetTop="0dp"
+    android:insetRight="0dp"
+    android:insetBottom="0dp">
     <vector
         android:width="108dp"
         android:height="108dp"
@@ -12,8 +12,8 @@
         <group
             android:pivotX="54"
             android:pivotY="54"
-            android:scaleX="1.04"
-            android:scaleY="1.04">
+            android:scaleX="1.15"
+            android:scaleY="1.15">
             <path
                 android:fillColor="#FFF8E1"
                 android:pathData="M54,22c-17.67,0 -32,14.33 -32,32s14.33,32 32,32s32,-14.33 32,-32S71.67,22 54,22z" />
