@@ -1,12 +1,5 @@
 # Calorie Snap
 
-[![Android](https://img.shields.io/badge/Android-24--34-3DDC84?logo=android)](#)
-[![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-7F52FF?logo=kotlin)](#)
-[![Compose BOM](https://img.shields.io/badge/Compose_BOM-2024.05.00-4285F4?logo=jetpackcompose)](#)
-[![AGP](https://img.shields.io/badge/AGP-8.4.1-3DDC84?logo=android)](#)
-[![License](https://img.shields.io/badge/License-MIT-yellow)](/LICENSE)
-[![Gradle](https://img.shields.io/badge/Gradle-8.7-02303A?logo=gradle)](#)
-
 Lightweight calorie tracking app for Android. Log meals by snapping a photo, typing a description, or entering calories manually. All estimates can be powered by a local [Ollama](https://ollama.ai) vision/LLM model, with a deterministic fallback when offline.
 
 ## Features
