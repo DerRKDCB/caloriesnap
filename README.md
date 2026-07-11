@@ -1,45 +1,99 @@
 # Calorie Snap
 
-Lightweight calorie tracking app for Android that keeps a running total for the current day, lets you snap meals with one tap, and pipes the photo through an Ollama-powered vision model (via your API key) to estimate calories.
+[![Android](https://img.shields.io/badge/Android-24--34-3DDC84?logo=android)](#)
+[![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-7F52FF?logo=kotlin)](#)
+[![Compose BOM](https://img.shields.io/badge/Compose_BOM-2024.05.00-4285F4?logo=jetpackcompose)](#)
+[![AGP](https://img.shields.io/badge/AGP-8.4.1-3DDC84?logo=android)](#)
+[![License](https://img.shields.io/badge/License-MIT-yellow)](/LICENSE)
+[![Gradle](https://img.shields.io/badge/Gradle-8.7-02303A?logo=gradle)](#)
 
-## Highlights
+Lightweight calorie tracking app for Android. Log meals by snapping a photo, typing a description, or entering calories manually. All estimates can be powered by a local [Ollama](https://ollama.ai) vision/LLM model, with a deterministic fallback when offline.
 
-- **Home dashboard** – Shows today’s intake, goal progress, and remaining calories at a glance.
-- **One-tap camera** – Launch the CameraX capture flow, snap a meal, and add the AI estimate directly to the day’s total.
-- **Configurable AI** – Settings screen stores your Ollama API key and preferred daily calorie goal via DataStore.
-- **Extensible estimator** – `CalorieEstimator` handles the Ollama HTTP request; if the key is missing (or the call fails) it falls back to a deterministic on-device stub for demos.
-- **Modern stack** – Compose Material 3, Navigation Compose, DataStore, CameraX, and coroutines, wrapped in a Gradle 8.7 project ready for Android Studio Iguana+.
+## Features
+
+- **AI-powered estimates** – Snap a meal photo or describe what you ate. Calorie, confidence, and description come back from your Ollama instance.
+- **Workout tracking** – Describe a workout and get an estimated burn. Calories are subtracted from your daily total.
+- **Manual entry** – Log calories directly with an optional note and workout toggle.
+- **Daily dashboard** – See today's intake, goal progress, and remaining calories at a glance. Navigate past days with the date picker to review history.
+- **Persistent history** – All meals are stored in Preferences DataStore, keyed by date. Totals reset automatically when the calendar date changes.
+- **Full import/export** – Export your meal history and settings as JSON, or restore from a previous export. Built into the Settings screen.
+- **Configurable AI backend** – Point the app at any Ollama server, choose a model, and test the connection—all from Settings.
+- **Deterministic fallback** – When no server is configured or the request fails, the estimator returns a seeded (reproducible) value so the UI stays testable.
 
 ## Project structure
 
 ```
 app/
- ├─ src/main/java/com/example/caloriestracker/
- │   ├─ MainActivity.kt                 # Navigation hub for Home, Camera, Settings
- │   ├─ CalorieTrackerViewModel.kt      # Shared state + DataStore bridge
- │   ├─ data/CaloriePreferencesRepository.kt
- │   ├─ ui/{Home,Camera,Settings}Screen.kt
- │   └─ ai/CalorieEstimator.kt          # Ollama client with stub fallback
- ├─ src/main/res/                       # Themes, strings, icons, XML resources
- └─ build.gradle.kts                    # Compose, CameraX, Navigation, DataStore deps
+├── src/main/
+│   ├── java/com/example/caloriestracker/
+│   │   ├── MainActivity.kt                    # Navigation: Home, Camera, Settings
+│   │   ├── CalorieTrackerViewModel.kt         # Shared UI state + DataStore bridge
+│   │   ├── data/
+│   │   │   ├── CaloriePreferencesRepository.kt  # DataStore persistence + export/import
+│   │   │   └── Meal.kt                          # Meal data class + JSON serialization
+│   │   ├── ui/
+│   │   │   ├── HomeScreen.kt                  # Dashboard, date nav, entry dialogs
+│   │   │   ├── CameraScreen.kt                # CameraX capture + AI estimate
+│   │   │   ├── SettingsScreen.kt              # Backend config, goal, import/export
+│   │   │   └── theme/                         # Material 3 theme (Color, Type, Theme)
+│   │   └── ai/
+│   │       └── CalorieEstimator.kt            # Ollama client + deterministic fallback
+│   └── res/                                   # Themes, strings, launcher icons, XML
+└── build.gradle.kts
 ```
 
 ## Getting started
 
-1. **Open in Android Studio** (Giraffe or newer) and sync the Gradle 8.7 project.
-2. **Run on device/emulator** (API 24+). The home screen shows today’s total; tap *Snap meal* to open the camera.
-3. **Enter your Ollama API key + goal** via the settings icon in the top-right before capturing if you want live AI estimates.
-4. **Customize AI** by editing `CalorieEstimator` (e.g., change the endpoint/model). Return a `CalorieEstimate` and the rest of the UI updates automatically.
+### Prerequisites
 
-### Command line build
+- Android Studio Iguana (2023.2.1) or newer
+- JDK 17+
+- An Android device / emulator running API 24+
+- (Optional) An [Ollama](https://ollama.ai) server with a vision model such as `llava`
+
+### Setup
+
+1. **Open** the project in Android Studio and let Gradle sync.
+2. **Run** on a device or emulator (`./gradlew :app:installDebug`).
+3. **(Optional) Configure AI** – Open Settings (gear icon), enter your Ollama server address and model name, then tap **Test connection**.
+4. **Log a meal** – Tap **Snap meal** to use the camera, **Text** for an AI text estimate, **Manual** to enter calories directly, or **Workout** to log exercise.
+
+### Command-line build
 
 ```bash
-./gradlew assembleDebug
-./gradlew connectedAndroidTest   # requires running emulator/device
+./gradlew :app:assembleDebug        # Build debug APK
+./gradlew :app:installDebug         # Build + install on connected device
+./gradlew :app:lintDebug            # Lint checks
 ```
 
-### Notes
+## Configuration
 
-- Ollama endpoint defaults to `http://localhost:11434/api/generate`. Point it to your server or proxy if you’re not running locally.
-- When the API key is missing (or the request fails) the estimator falls back to a deterministic pseudo-random value so the flow remains testable.
-- DataStore keeps today’s total, the API key, and the calorie goal. Totals reset automatically when the calendar date changes.
+| Setting | Default | Description |
+|---|---|---|
+| **Ollama address** | `http://localhost:11434` | Base URL of your Ollama server |
+| **Model** | `llava` | Ollama model for image/text estimation |
+| **API key** | *(empty)* | Optional Bearer token for authenticated endpoints |
+| **Daily goal** | 2000 kcal | Daily calorie target (minimum 500) |
+
+All settings are persisted in a Preferences DataStore. The estimator falls back to deterministic seeded values when no server is configured or a request fails.
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Language | Kotlin 1.9.24 |
+| UI | Compose Material 3 + Material Icons Extended |
+| Navigation | Navigation Compose 2.7.7 |
+| Camera | CameraX 1.3.3 (Preview + ImageCapture) |
+| Persistence | Preferences DataStore |
+| AI client | Raw `HttpURLConnection` + JSON |
+| Image parsing | ExifInterface for rotation correction |
+| Build | Gradle 8.7, AGP 8.4.1, Java 17 desugaring |
+
+## License
+
+```
+MIT License
+
+Copyright (c) 2024 Robert
+```
