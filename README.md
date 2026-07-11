@@ -90,14 +90,12 @@ All settings are persisted in a Preferences DataStore. The estimator falls back 
 | Image parsing | ExifInterface for rotation correction |
 | Build | Gradle 8.7, AGP 8.4.1, Java 17 desugaring |
 
-## License
-
 ## Disclaimer
 
 This project was vibe coded — most of it was written through natural language prompts to an AI coding assistant. It works, but treat it as a prototype. Review, test, and tweak before relying on it for anything serious.
 
-```
-MIT License
+## License
+
+MIT License — see [LICENSE](/LICENSE) for details.
 
 Copyright (c) 2026 DerRKDCB
-```
