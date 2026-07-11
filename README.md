@@ -99,5 +99,5 @@ This project was vibe coded — most of it was written through natural language 
 ```
 MIT License
 
-Copyright (c) 2024 DerRKDCB
+Copyright (c) 2026 DerRKDCB
 ```
