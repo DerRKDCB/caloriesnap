@@ -24,4 +24,4 @@ ok button for text input
 ok track workout
 
 
-icon / logo
+ok icon / logo
