@@ -27,8 +27,8 @@ data class CaloriePreferences(
     val mealHistory: Map<LocalDate, List<Meal>> = emptyMap()
 ) {
     companion object {
-        const val DEFAULT_OLLAMA_ADDRESS = "http://localhost:11434"
-        const val DEFAULT_OLLAMA_MODEL = "llava"
+        const val DEFAULT_OLLAMA_ADDRESS = "https://ollama.com/api"
+        const val DEFAULT_OLLAMA_MODEL = "gemma4:31b-cloud"
     }
 }
 

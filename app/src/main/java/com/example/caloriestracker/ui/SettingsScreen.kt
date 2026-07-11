@@ -178,7 +178,7 @@ fun SettingsScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Model") },
-                placeholder = { Text("llava") },
+                placeholder = { Text("gemma4:31b-cloud") },
                 singleLine = true
             )
 
@@ -249,7 +249,7 @@ fun SettingsScreen(
             )
 
             Text(
-                text = "Calorie estimates use your Ollama instance. Set the server address and the vision model to use (for example llava), then tap Test connection to verify it works.",
+                text = "Calorie estimates use your Ollama instance. Set the server address and the model to use (for example gemma4:31b-cloud), then tap Test connection to verify it works.",
             )
 
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

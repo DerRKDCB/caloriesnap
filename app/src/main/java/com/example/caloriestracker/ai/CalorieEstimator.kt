@@ -34,7 +34,7 @@ sealed interface OllamaTestResult {
  * request fails, so the UI can still be exercised without a backend.
  */
 object CalorieEstimator {
-    private const val DEFAULT_ADDRESS = "http://localhost:11434"
+    private const val DEFAULT_ADDRESS = "https://ollama.com/api"
     private const val USER_AGENT = "CalorieSnap/1.0 (Android)"
     private val descriptors = listOf(
         "Looks like a balanced plate",

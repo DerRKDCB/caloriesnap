@@ -49,7 +49,7 @@ app/
 - Android Studio Iguana (2023.2.1) or newer
 - JDK 17+
 - An Android device / emulator running API 24+
-- (Optional) An [Ollama](https://ollama.ai) server with a vision model such as `llava`
+- (Optional) An [Ollama](https://ollama.ai) server with a model such as `gemma4:31b-cloud`
 
 ### Setup
 
@@ -70,8 +70,8 @@ app/
 
 | Setting | Default | Description |
 |---|---|---|
-| **Ollama address** | `http://localhost:11434` | Base URL of your Ollama server |
-| **Model** | `llava` | Ollama model for image/text estimation |
+| **Ollama address** | `https://ollama.com/api` | Base URL of your Ollama server |
+| **Model** | `gemma4:31b-cloud` | Ollama model for image/text estimation |
 | **API key** | *(empty)* | Optional Bearer token for authenticated endpoints |
 | **Daily goal** | 2000 kcal | Daily calorie target (minimum 500) |
 
@@ -92,8 +92,12 @@ All settings are persisted in a Preferences DataStore. The estimator falls back 
 
 ## License
 
+## Disclaimer
+
+This project was vibe coded — most of it was written through natural language prompts to an AI coding assistant. It works, but treat it as a prototype. Review, test, and tweak before relying on it for anything serious.
+
 ```
 MIT License
 
-Copyright (c) 2024 Robert
+Copyright (c) 2024 DerRKDCB
 ```

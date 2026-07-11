@@ -26,7 +26,7 @@
 - Settings relies on suspend lambdas for import/export and `CalorieEstimator.testConnection`. It stages export payloads before launching the system document picker; if you change signatures, keep the coroutine + ActivityResult flow compatible (`app/src/main/java/com/example/caloriestracker/ui/SettingsScreen.kt`).
 
 ## Ollama & Configuration
-- Defaults come from `CaloriePreferences.DEFAULT_OLLAMA_ADDRESS` (`http://localhost:11434`) and model `llava`. The Settings “Test connection” button surfaces raw HTTP errors, so bubble up server messages when touching that code.
+- Defaults come from `CaloriePreferences.DEFAULT_OLLAMA_ADDRESS` (`https://ollama.com/api`) and model `gemma4:31b-cloud`. The Settings “Test connection” button surfaces raw HTTP errors, so bubble up server messages when touching that code.
 - API keys and server details are stored verbatim in DataStore. There is no env var loading—any new secrets need an in-app settings surface or a mock fallback.
 
 ## Practical Tips
