@@ -7,6 +7,7 @@ import android.graphics.Matrix
 import android.view.Surface
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -33,6 +34,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.rounded.FlashOn
+import androidx.compose.material.icons.rounded.FlashOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -100,6 +103,8 @@ fun CameraScreen(
     var currentEstimate by remember { mutableStateOf<CalorieEstimate?>(null) }
     var isProcessing by remember { mutableStateOf(false) }
     var errorDisplay by remember { mutableStateOf<ErrorDisplay?>(null) }
+    var torchOn by remember { mutableStateOf(false) }
+    var camera by remember { mutableStateOf<Camera?>(null) }
     val executor = remember { ContextCompat.getMainExecutor(context) }
 
     fun capture() {
@@ -149,7 +154,11 @@ fun CameraScreen(
     Box(modifier = modifier.fillMaxSize()) {
         if (capturedImage == null) {
             if (hasCameraPermission) {
-                CameraPreview(imageCapture = imageCapture, modifier = Modifier.fillMaxSize())
+                CameraPreview(
+                    imageCapture = imageCapture,
+                    onCameraAvailable = { camera = it },
+                    modifier = Modifier.fillMaxSize()
+                )
             }
         } else {
             Image(
@@ -167,9 +176,28 @@ fun CameraScreen(
                 .padding(16.dp),
             horizontalAlignment = Alignment.Start
         ) {
-            Surface(shape = CircleShape, color = Color.Black.copy(alpha = 0.4f)) {
-                IconButton(onClick = onClose) {
-                    Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Surface(shape = CircleShape, color = Color.Black.copy(alpha = 0.4f)) {
+                    IconButton(onClick = onClose) {
+                        Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    }
+                }
+                if (capturedImage == null) {
+                    Surface(shape = CircleShape, color = Color.Black.copy(alpha = 0.4f)) {
+                        IconButton(onClick = {
+                            torchOn = !torchOn
+                            camera?.cameraControl?.enableTorch(torchOn)
+                        }) {
+                            Icon(
+                                imageVector = if (torchOn) Icons.Rounded.FlashOn else Icons.Rounded.FlashOff,
+                                contentDescription = if (torchOn) "Disable flash" else "Enable flash",
+                                tint = if (torchOn) Color(0xFFFFD700) else Color.White
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -327,7 +355,11 @@ private fun CaptureButton(enabled: Boolean, onClick: () -> Unit, label: String) 
 }
 
 @Composable
-private fun CameraPreview(imageCapture: ImageCapture, modifier: Modifier = Modifier) {
+private fun CameraPreview(
+    imageCapture: ImageCapture,
+    onCameraAvailable: (Camera) -> Unit,
+    modifier: Modifier = Modifier
+) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
     val previewView = remember {
@@ -349,12 +381,13 @@ private fun CameraPreview(imageCapture: ImageCapture, modifier: Modifier = Modif
                     it.setSurfaceProvider(previewView.surfaceProvider)
                 }
                 cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(
+                val boundCamera = cameraProvider.bindToLifecycle(
                     lifecycleOwner,
                     CameraSelector.DEFAULT_BACK_CAMERA,
                     preview,
                     imageCapture
                 )
+                onCameraAvailable(boundCamera)
             } catch (_: Exception) {
             }
         }
