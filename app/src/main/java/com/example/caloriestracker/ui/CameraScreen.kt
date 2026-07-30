@@ -17,7 +17,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,7 +51,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -101,7 +99,7 @@ fun CameraScreen(
     var capturedImage by remember { mutableStateOf<ImageBitmap?>(null) }
     var currentEstimate by remember { mutableStateOf<CalorieEstimate?>(null) }
     var isProcessing by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var errorDisplay by remember { mutableStateOf<ErrorDisplay?>(null) }
     val executor = remember { ContextCompat.getMainExecutor(context) }
 
     fun capture() {
@@ -115,7 +113,7 @@ fun CameraScreen(
             executor,
             object : ImageCapture.OnImageSavedCallback {
                 override fun onError(exception: ImageCaptureException) {
-                    errorMessage = exception.message ?: "Unable to capture meal"
+                    errorDisplay = ErrorDisplay(detail = exception.stackTraceToString())
                     isProcessing = false
                     photoFile.delete()
                 }
@@ -124,7 +122,7 @@ fun CameraScreen(
                     val bitmap = photoFile.toBitmap()
                     photoFile.delete()
                     if (bitmap == null) {
-                        errorMessage = "Could not read the photo"
+                        errorDisplay = ErrorDisplay(detail = "Could not read the photo")
                         isProcessing = false
                         return
                     }
@@ -133,7 +131,7 @@ fun CameraScreen(
                         runCatching { CalorieEstimator.estimate(bitmap, apiKey, ollamaAddress, ollamaModel) }
                             .onSuccess { currentEstimate = it }
                             .onFailure { throwable ->
-                                errorMessage = throwable.localizedMessage ?: "AI estimate failed"
+                                errorDisplay = ErrorDisplay(detail = throwable.stackTraceToString())
                             }
                         isProcessing = false
                     }
@@ -145,7 +143,7 @@ fun CameraScreen(
     fun reset() {
         capturedImage = null
         currentEstimate = null
-        errorMessage = null
+        errorDisplay = null
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -207,37 +205,18 @@ fun CameraScreen(
         }
 
         AnimatedVisibility(
-            visible = errorMessage != null,
+            visible = errorDisplay != null,
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 72.dp),
+                .padding(top = 72.dp, start = 16.dp, end = 16.dp),
             enter = fadeIn(),
             exit = fadeOut()
         ) {
-            errorMessage?.let { message ->
-                Surface(
-                    color = Color(0xFFFF5C5C),
-                    shape = RoundedCornerShape(18.dp),
-                    tonalElevation = 6.dp
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Text(text = message, color = Color.White, modifier = Modifier.weight(1f))
-                        Text(
-                            text = "Dismiss",
-                            color = Color.White,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color.White.copy(alpha = 0.1f))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                                .clickable { errorMessage = null }
-                        )
-                    }
-                }
+            errorDisplay?.let { error ->
+                ExpandableError(
+                    error = error,
+                    modifier = Modifier.clickable { errorDisplay = null }
+                )
             }
         }
 

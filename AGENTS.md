@@ -16,7 +16,7 @@
 - `dailyGoal` is coerced to ≥500 kcal and every meal add/delete updates `todays_date`. Uphold those guards when adding new repository entry points.
 
 ## AI Estimator & Networking
-- `CalorieEstimator` is the only place that talks to Ollama (`app/src/main/java/com/example/caloriestracker/ai/CalorieEstimator.kt`). Keep all new AI flows going through it so the deterministic fallback (seeded by bitmap/description) remains available for offline demos and tests.
+- `CalorieEstimator` is the only place that talks to Ollama (`app/src/main/java/com/example/caloriestracker/ai/CalorieEstimator.kt`). Keep all new AI flows going through it. Throws `EstimateException` when the server is unreachable, unconfigured, or returns unparseable output; the raw response is included in the message.
 - Remote calls always hit `<address>/api/generate` with a JSON-only response contract. The parser extracts the first `{...}` block or falls back to regexes; if you change prompts, ensure the model still returns parseable JSON for calories/confidence/note.
 - `postJson` manually handles redirects to preserve the `Authorization` header. Reuse it (or honor the same behavior) or the `Test connection` button in Settings will break against HTTPS proxies.
 

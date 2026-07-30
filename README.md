@@ -1,6 +1,6 @@
 # Calorie Snap
 
-Lightweight calorie tracking app for Android. Log meals by snapping a photo, typing a description, or entering calories manually. All estimates can be powered by a local [Ollama](https://ollama.ai) vision/LLM model, with a deterministic fallback when offline.
+Lightweight calorie tracking app for Android. Log meals by snapping a photo, typing a description, or entering calories manually. Estimates are powered by a local [Ollama](https://ollama.ai) vision/LLM model.
 
 ## Features
 
@@ -11,7 +11,7 @@ Lightweight calorie tracking app for Android. Log meals by snapping a photo, typ
 - **Persistent history** – All meals are stored in Preferences DataStore, keyed by date. Totals reset automatically when the calendar date changes.
 - **Full import/export** – Export your meal history and settings as JSON, or restore from a previous export. Built into the Settings screen.
 - **Configurable AI backend** – Point the app at any Ollama server, choose a model, and test the connection—all from Settings.
-- **Deterministic fallback** – When no server is configured or the request fails, the estimator returns a seeded (reproducible) value so the UI stays testable.
+- **Expandable error details** – When an AI estimate fails, the app shows "Something went wrong" with a collapsible trace and a one-tap copy button for easy debugging.
 
 ## Project structure
 
@@ -28,9 +28,10 @@ app/
 │   │   │   ├── HomeScreen.kt                  # Dashboard, date nav, entry dialogs
 │   │   │   ├── CameraScreen.kt                # CameraX capture + AI estimate
 │   │   │   ├── SettingsScreen.kt              # Backend config, goal, import/export
+│   │   │   ├── ExpandableError.kt             # Collapsible error with copy-to-clipboard
 │   │   │   └── theme/                         # Material 3 theme (Color, Type, Theme)
 │   │   └── ai/
-│   │       └── CalorieEstimator.kt            # Ollama client + deterministic fallback
+│   │       └── CalorieEstimator.kt            # Ollama client + AI estimation
 │   └── res/                                   # Themes, strings, launcher icons, XML
 └── build.gradle.kts
 ```
@@ -68,7 +69,7 @@ app/
 | **API key** | *(empty)* | Optional Bearer token for authenticated endpoints |
 | **Daily goal** | 2000 kcal | Daily calorie target (minimum 500) |
 
-All settings are persisted in a Preferences DataStore. The estimator falls back to deterministic seeded values when no server is configured or a request fails.
+All settings are persisted in a Preferences DataStore. The estimator throws an [EstimateException](app/src/main/java/com/example/caloriestracker/ai/CalorieEstimator.kt) with the raw server response embedded in the message when a request fails or when no server is configured.
 
 ## Tech stack
 

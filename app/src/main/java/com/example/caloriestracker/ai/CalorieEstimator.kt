@@ -3,22 +3,24 @@ package com.example.caloriestracker.ai
 import android.graphics.Bitmap
 import android.util.Base64
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
-import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
-import kotlin.random.Random
 
 data class CalorieEstimate(
     val calories: Int,
     val confidence: Float,
     val note: String
 )
+
+class EstimateException(
+    detail: String,
+    cause: Throwable? = null
+) : Exception(detail, cause)
 
 /**
  * Result of probing the configured Ollama instance from Settings.
@@ -29,20 +31,14 @@ sealed interface OllamaTestResult {
 }
 
 /**
- * Talks to a (configurable) Ollama instance to interpret meal photos.
- * Falls back to a deterministic stub when no instance is configured or the
- * request fails, so the UI can still be exercised without a backend.
+ * Talks to a (configurable) Ollama instance to interpret meal photos and
+ * estimate workout calories.  Throws [EstimateException] when no server is
+ * configured or when the remote response cannot be parsed — the exception
+ * message includes the raw response so callers can log or display it.
  */
 object CalorieEstimator {
     private const val DEFAULT_ADDRESS = "https://ollama.com/api"
     private const val USER_AGENT = "CalorieSnap/1.0 (Android)"
-    private val descriptors = listOf(
-        "Looks like a balanced plate",
-        "Carb heavy portion",
-        "Lean protein focused serving",
-        "Dense and indulgent treat",
-        "Fresh bowl of greens"
-    )
     private enum class PromptContext { MEAL, WORKOUT }
 
     suspend fun estimate(
@@ -52,10 +48,12 @@ object CalorieEstimator {
         model: String
     ): CalorieEstimate {
         if (address.isNotBlank() && model.isNotBlank()) {
-            return runCatching { remoteEstimate(bitmap, apiKey, address, model) }
-                .getOrElse { fallbackEstimateFromBitmap(bitmap) }
+            return remoteEstimate(bitmap, apiKey, address, model)
         }
-        return fallbackEstimateFromBitmap(bitmap)
+        throw EstimateException(
+            "AI server not configured (address=${address.orEmpty().take(30)}, model=$model). " +
+                "Set an Ollama address and model in Settings before estimating from a photo."
+        )
     }
 
     suspend fun estimateFromDescription(
@@ -67,10 +65,12 @@ object CalorieEstimator {
         val input = description.trim()
         require(input.isNotBlank()) { "Description cannot be empty" }
         if (address.isNotBlank() && model.isNotBlank()) {
-            return runCatching { remoteEstimate(input, apiKey, address, model, PromptContext.MEAL) }
-                .getOrElse { fallbackEstimateFromText(input) }
+            return remoteEstimate(input, apiKey, address, model, PromptContext.MEAL)
         }
-        return fallbackEstimateFromText(input)
+        throw EstimateException(
+            "AI server not configured (address=${address.orEmpty().take(30)}, model=$model). " +
+                "Set an Ollama address and model in Settings before estimating from a description."
+        )
     }
 
     suspend fun estimateWorkoutFromDescription(
@@ -82,10 +82,12 @@ object CalorieEstimator {
         val input = description.trim()
         require(input.isNotBlank()) { "Description cannot be empty" }
         if (address.isNotBlank() && model.isNotBlank()) {
-            return runCatching { remoteEstimate(input, apiKey, address, model, PromptContext.WORKOUT) }
-                .getOrElse { fallbackWorkoutEstimateFromText(input) }
+            return remoteEstimate(input, apiKey, address, model, PromptContext.WORKOUT)
         }
-        return fallbackWorkoutEstimateFromText(input)
+        throw EstimateException(
+            "AI server not configured (address=${address.orEmpty().take(30)}, model=$model). " +
+                "Set an Ollama address and model in Settings before estimating workout calories."
+        )
     }
 
     /**
@@ -223,7 +225,11 @@ object CalorieEstimator {
             }
             body
         }
-        return parseRemoteEstimate(response) ?: fallbackEstimateFromBitmap(bitmap)
+        return parseRemoteEstimate(response) ?: throw EstimateException(
+            "Could not parse AI response for image estimate. " +
+                "Raw response: ${response.take(500)}",
+            cause = java.io.IOException("parseRemoteEstimate returned null")
+        )
     }
 
     private suspend fun remoteEstimate(
@@ -255,40 +261,11 @@ object CalorieEstimator {
             }
             body
         }
-        val parsed = parseRemoteEstimate(response)
-        return when {
-            parsed != null -> parsed
-            context == PromptContext.MEAL -> fallbackEstimateFromText(description)
-            else -> fallbackWorkoutEstimateFromText(description)
-        }
-    }
-
-    private suspend fun fallbackEstimateFromBitmap(bitmap: Bitmap): CalorieEstimate {
-        delay(1200)
-        val seed = bitmap.byteCount + bitmap.width * bitmap.height
-        val random = Random(seed.toLong())
-        val calories = 180 + (seed % 620).toInt().absoluteValue
-        val confidence = 0.65f + random.nextFloat() * 0.3f
-        val note = descriptors[random.nextInt(descriptors.size)]
-        return CalorieEstimate(calories, confidence.coerceAtMost(0.97f), note)
-    }
-
-    private suspend fun fallbackEstimateFromText(description: String): CalorieEstimate {
-        delay(900)
-        val seed = description.hashCode().absoluteValue
-        val calories = 150 + (seed % 550)
-        val confidence = 0.55f + ((seed % 40) / 100f)
-        val note = if (description.isNotBlank()) description.trim().take(80) else descriptors[seed % descriptors.size]
-        return CalorieEstimate(calories, confidence.coerceAtMost(0.9f), note.ifBlank { "Estimated from description" })
-    }
-
-    private suspend fun fallbackWorkoutEstimateFromText(description: String): CalorieEstimate {
-        delay(800)
-        val seed = description.hashCode().absoluteValue
-        val calories = 80 + (seed % 420)
-        val confidence = 0.6f + ((seed % 30) / 100f)
-        val note = if (description.isNotBlank()) description.trim().take(80) else "Workout session"
-        return CalorieEstimate(calories, confidence.coerceAtMost(0.95f), note.ifBlank { "Workout session" })
+        return parseRemoteEstimate(response) ?: throw EstimateException(
+            "Could not parse AI response for ${context.name.lowercase()} estimate. " +
+                "Raw response: ${response.take(500)}",
+            cause = java.io.IOException("parseRemoteEstimate returned null")
+        )
     }
 
     private fun parseRemoteEstimate(body: String): CalorieEstimate? {

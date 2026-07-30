@@ -104,11 +104,11 @@ fun HomeScreen(
     var manualIsWorkout by rememberSaveable { mutableStateOf(false) }
     var llmDialogVisible by rememberSaveable { mutableStateOf(false) }
     var llmDescription by rememberSaveable { mutableStateOf("") }
-    var llmError by remember { mutableStateOf<String?>(null) }
+    var llmError by remember { mutableStateOf<ErrorDisplay?>(null) }
     var llmIsLoading by remember { mutableStateOf(false) }
     var workoutDialogVisible by rememberSaveable { mutableStateOf(false) }
     var workoutDescription by rememberSaveable { mutableStateOf("") }
-    var workoutError by remember { mutableStateOf<String?>(null) }
+    var workoutError by remember { mutableStateOf<ErrorDisplay?>(null) }
     var workoutIsLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -440,9 +440,7 @@ fun HomeScreen(
                             Text(text = "Requesting estimate…")
                         }
                     }
-                    llmError?.let {
-                        Text(text = it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                    }
+                    llmError?.let { ExpandableError(error = it) }
                 }
             },
             confirmButton = {
@@ -465,7 +463,7 @@ fun HomeScreen(
                                 llmDescription = ""
                                 llmDialogVisible = false
                             }.onFailure { error ->
-                                llmError = error.localizedMessage ?: "Could not estimate calories"
+                                llmError = ErrorDisplay(detail = error.stackTraceToString())
                             }
                             llmIsLoading = false
                         }
@@ -523,9 +521,7 @@ fun HomeScreen(
                             Text(text = "Estimating calories burned…")
                         }
                     }
-                    workoutError?.let {
-                        Text(text = it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                    }
+                    workoutError?.let { ExpandableError(error = it) }
                 }
             },
             confirmButton = {
@@ -551,7 +547,7 @@ fun HomeScreen(
                                 workoutDescription = ""
                                 workoutDialogVisible = false
                             }.onFailure { error ->
-                                workoutError = error.localizedMessage ?: "Could not estimate workout calories"
+                                workoutError = ErrorDisplay(detail = error.stackTraceToString())
                             }
                             workoutIsLoading = false
                         }
